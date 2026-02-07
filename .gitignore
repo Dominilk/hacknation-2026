@@ -1,0 +1,5 @@
+.env
+__pycache__/
+poc/graph/_index/
+poc/graph/nodes/
+poc/web/graph-data.json

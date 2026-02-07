@@ -1,0 +1,226 @@
+[
+  {
+    "id": "evt-001",
+    "type": "meeting_notes",
+    "source": "platform-standup",
+    "timestamp": "2026-01-20T09:00:00",
+    "participants": ["marcus", "alice", "bob"],
+    "content": "Platform Team Standup — Jan 20\n\n- Auth Migration project officially kicking off this sprint\n- Alice: setting up the new identity provider (Keycloak) in staging\n- Bob: auditing current session management across services — 14 services identified so far\n- Marcus: will draft the migration plan and share by EOD Wednesday\n- Blocker: need DevOps to provision staging Keycloak cluster\n- Action items:\n  - Alice → Keycloak staging config (due Jan 22)\n  - Bob → complete service audit, share spreadsheet (due Jan 22)\n  - Marcus → migration plan doc v1 (due Jan 22)"
+  },
+  {
+    "id": "evt-002",
+    "type": "slack_message",
+    "source": "platform-team",
+    "timestamp": "2026-01-20T14:32:00",
+    "participants": ["alice"],
+    "content": "heads up — the service audit is turning up some surprises. the product API and the dashboard both have their own auth middleware that bypasses the shared lib. going to need extra work to migrate those two."
+  },
+  {
+    "id": "evt-003",
+    "type": "status_update",
+    "source": "product-weekly",
+    "timestamp": "2026-01-21T10:00:00",
+    "participants": ["sarah"],
+    "content": "Product Team Weekly Status — Jan 21\n\nQ2 Product Launch (codename: Nova)\n- Status: ON TRACK\n- Launch date: March 15\n- Feature freeze: Feb 28\n- Design finalized for new onboarding flow — dev starts this week\n- API v3 endpoints 60% complete (Elena + James)\n- Mobile app redesign in progress (Tom)\n\nRisks:\n- None currently identified\n\nNext week:\n- Start integration testing with staging environment\n- User research sessions scheduled for Jan 27-28"
+  },
+  {
+    "id": "evt-004",
+    "type": "pr_description",
+    "source": "github",
+    "timestamp": "2026-01-21T16:45:00",
+    "participants": ["bob"],
+    "content": "PR #342 — Auth service audit: document all authentication touchpoints\n\nThis PR adds a comprehensive audit of every service that handles authentication.\n\nFindings:\n- 14 backend services use the shared auth library\n- 2 services (product-api, dashboard-bff) have custom auth middleware\n- 3 services still use deprecated session-cookie auth\n- Token expiration currently set to 24h across all services\n\nAdded: docs/auth-audit.md with full inventory.\n\nReviewers: @marcus @alice"
+  },
+  {
+    "id": "evt-005",
+    "type": "meeting_notes",
+    "source": "marcus-sarah-1on1",
+    "timestamp": "2026-01-22T11:00:00",
+    "participants": ["marcus", "sarah"],
+    "content": "Marcus ↔ Sarah 1:1 — Jan 22\n\n- Marcus flagged that the auth migration will require changes to product-api\n- product-api has custom auth middleware that needs to be replaced\n- This could affect the Q2 launch timeline if not coordinated\n- Sarah: \"We need the staging environment stable by Feb 15 for integration testing. If auth migration breaks that, we have a problem.\"\n- Agreed: need a cross-team sync to figure out sequencing\n- Action: Marcus to set up a meeting with Sarah, Priya, and Lisa this week"
+  },
+  {
+    "id": "evt-006",
+    "type": "slack_message",
+    "source": "general",
+    "timestamp": "2026-01-22T15:10:00",
+    "participants": ["marcus"],
+    "content": "@sarah @priya @lisa — scheduling a cross-team sync re: auth migration timeline and its impact on Q2 launch and ML pipeline. Thursday 2pm work for everyone?"
+  },
+  {
+    "id": "evt-007",
+    "type": "slack_message",
+    "source": "general",
+    "timestamp": "2026-01-22T15:18:00",
+    "participants": ["priya"],
+    "content": "Thursday works. Heads up — we're going to need the new auth system for ML Pipeline v2 as well. Our new inference API needs proper service-to-service auth. Adding that to the agenda."
+  },
+  {
+    "id": "evt-008",
+    "type": "decision_memo",
+    "source": "architecture-decisions",
+    "timestamp": "2026-01-23T09:00:00",
+    "participants": ["marcus", "lisa"],
+    "content": "ADR-019: JWT Token Standard for Auth Migration\n\nStatus: PROPOSED\n\nContext:\nWe are migrating from session-based auth to token-based auth across all services. Need to standardize on a token format and signing algorithm.\n\nOptions Considered:\n1. JWT with HS256 (symmetric) — simpler but requires shared secret distribution\n2. JWT with RS256 (asymmetric) — more complex setup but better for service-to-service auth\n3. Opaque tokens with introspection endpoint — simpler tokens but adds latency\n\nDecision:\nJWT with RS256 (asymmetric signing).\n\nRationale:\n- Asymmetric signing means services only need the public key to verify tokens\n- No shared secret management headaches\n- Works well for both user-facing and service-to-service auth\n- Industry standard for our scale\n\nConsequences:\n- Need to set up key rotation infrastructure\n- Slightly larger token size\n- Team needs to understand RS256 key management\n\nApproval: Pending CTO review"
+  },
+  {
+    "id": "evt-009",
+    "type": "meeting_notes",
+    "source": "cross-team-sync",
+    "timestamp": "2026-01-23T14:00:00",
+    "participants": ["marcus", "sarah", "priya", "lisa"],
+    "content": "Cross-Team Sync: Auth Migration Impact — Jan 23\n\nAttendees: Marcus (Platform), Sarah (Product), Priya (Data), Lisa (CTO)\n\nKey Discussion:\n- Auth migration timeline: Platform targeting Feb 14 for core services\n- product-api migration: 3-5 day effort, needs to happen before Product's integration testing\n- ML Pipeline v2 also depends on new auth for inference API\n\nTimeline Conflict:\n- Product needs stable staging by Feb 15\n- Auth migration to product-api will cause 2-3 days of staging instability\n- If auth migration slips at all, it blocks Q2 launch prep\n\nResolution — Phased Rollout:\n1. Phase 1 (Jan 27 - Feb 7): Core platform services + internal tools\n2. Phase 2 (Feb 10 - Feb 14): product-api migration (coordinated with Product team)\n3. Phase 3 (Feb 17 - Feb 21): ML Pipeline services + service accounts\n\nDecisions:\n- JWT with RS256 approved (see ADR-019)\n- Phased rollout approach approved\n- Product team will freeze product-api changes during Phase 2\n- Data team will start service account design now, implement in Phase 3\n\nAction Items:\n- Marcus → detailed Phase 1 task breakdown (due Jan 24)\n- Sarah → identify product-api test coverage gaps (due Jan 27)\n- Priya → service account requirements doc (due Jan 27)\n- Lisa → communicate plan to David\n\nNext sync: Jan 30"
+  },
+  {
+    "id": "evt-010",
+    "type": "slack_message",
+    "source": "platform-team",
+    "timestamp": "2026-01-24T09:45:00",
+    "participants": ["marcus"],
+    "content": "Team — auth migration Phase 1 task breakdown is up in Linear. Assigned stories to everyone. Key milestones:\n- Keycloak production config: Jan 29\n- Shared auth library v2: Feb 3\n- Core service migration: Feb 7\n\nAlice on Keycloak infra, Bob on library rewrite, I'm handling the migration scripts. Let's crush it."
+  },
+  {
+    "id": "evt-011",
+    "type": "email",
+    "source": "email",
+    "timestamp": "2026-01-24T11:30:00",
+    "participants": ["david"],
+    "content": "From: David Chen <david@nexuslabs.io>\nTo: lisa@nexuslabs.io\nSubject: Q2 Launch Status?\n\nLisa,\n\nBoard meeting coming up next week. Need a clear picture on Q2 launch timing. I've been hearing rumblings about the auth migration causing some timeline pressure.\n\nCan you give me a quick summary of:\n1. Are we still on track for March 15 launch?\n2. What are the main risks?\n3. Anything I should flag to the board?\n\nThanks,\nDavid"
+  },
+  {
+    "id": "evt-012",
+    "type": "email",
+    "source": "email",
+    "timestamp": "2026-01-24T14:15:00",
+    "participants": ["lisa"],
+    "content": "From: Lisa Park <lisa@nexuslabs.io>\nTo: david@nexuslabs.io\nSubject: Re: Q2 Launch Status?\n\nDavid,\n\nHere's where we stand:\n\n1. Launch date: We're working toward March 15 but there's moderate risk of a 1-2 week slip. The auth migration creates a dependency — Product team needs auth changes to product-api completed by Feb 14 to stay on track for integration testing.\n\n2. Main risks:\n   - Auth migration is a significant infrastructure change touching 14+ services\n   - We've designed a phased rollout to minimize disruption\n   - Product-api migration (Phase 2, Feb 10-14) is the critical path\n   - If Phase 1 slips, everything shifts\n\n3. For the board:\n   - Recommend framing as \"targeting March 15, with contingency to April 1\"\n   - The auth migration is necessary regardless — it addresses technical debt and security requirements\n   - All three teams are aligned and coordinating well\n\nI can prepare a more detailed brief if you'd like.\n\nLisa"
+  },
+  {
+    "id": "evt-013",
+    "type": "slack_message",
+    "source": "data-team",
+    "timestamp": "2026-01-27T10:20:00",
+    "participants": ["priya"],
+    "content": "Service account requirements doc is ready: docs/service-accounts-rfc.md\n\nKey takeaway from the design work: microservices auth should use dedicated service accounts, not user tokens. User tokens have user-scoped permissions and expiration policies that don't make sense for service-to-service calls. Service accounts give us:\n- Fine-grained per-service permissions\n- Independent rotation schedules\n- Better audit trails\n- No dependency on user sessions\n\n@marcus this might affect how you design the token scoping in Phase 1"
+  },
+  {
+    "id": "evt-014",
+    "type": "slack_message",
+    "source": "platform-team",
+    "timestamp": "2026-01-27T10:55:00",
+    "participants": ["marcus"],
+    "content": "@priya good call — we were actually planning to use user tokens for inter-service calls initially to keep things simple. But you're right, that's going to cause problems down the road. Let me update the auth library design to support both user tokens and service account tokens from the start."
+  },
+  {
+    "id": "evt-015",
+    "type": "meeting_notes",
+    "source": "platform-standup",
+    "timestamp": "2026-01-27T09:00:00",
+    "participants": ["marcus", "alice", "bob", "kai"],
+    "content": "Platform Team Standup — Jan 27\n\n- Welcome Kai! New engineer joining Platform team starting today\n- Kai: background in distributed systems, previously at Stripe\n- Onboarding plan: pair with Bob this week on auth library v2\n\nAuth Migration Phase 1 Status:\n- Alice: Keycloak staging is up and running, working on production config\n- Bob: auth library v2 scaffolding done, implementing RS256 token verification\n- Marcus: migration scripts for user-service and notification-service drafted\n\n- Bob raised concern: current token expiration is 24 hours — is that what we want for the new system?\n- Marcus: good question, let's discuss. 24h feels too long from a security perspective.\n- Decision needed on token expiration policy — will bring up with Lisa\n\nAction Items:\n- Marcus → schedule token expiration policy discussion with Lisa\n- Bob → continue auth library v2, pair with Kai\n- Alice → Keycloak production config by Jan 29\n- Kai → review auth audit doc and migration plan, get dev environment set up"
+  },
+  {
+    "id": "evt-016",
+    "type": "slack_message",
+    "source": "platform-team",
+    "timestamp": "2026-01-27T16:30:00",
+    "participants": ["kai"],
+    "content": "First day wrap-up: went through the auth audit doc, migration plan, and ADR-019. The phased rollout makes sense. One question — are we planning to support token revocation? RS256 JWTs are stateless so we can't invalidate them server-side without a blocklist. Might matter for the security review."
+  },
+  {
+    "id": "evt-017",
+    "type": "slack_message",
+    "source": "platform-team",
+    "timestamp": "2026-01-27T16:42:00",
+    "participants": ["marcus"],
+    "content": "Great catch Kai. We don't have revocation in the current plan. Short-lived tokens + refresh token rotation should cover most cases, but yeah, for compromised tokens we'd need a blocklist or short enough expiry that it's acceptable. Adding this to the token expiration policy discussion."
+  },
+  {
+    "id": "evt-018",
+    "type": "meeting_notes",
+    "source": "security-review",
+    "timestamp": "2026-01-28T15:00:00",
+    "participants": ["marcus", "lisa", "bob", "kai"],
+    "content": "Token Expiration Policy Discussion — Jan 28\n\nAttendees: Marcus, Lisa, Bob, Kai\n\nCurrent state: 24-hour token expiration, no refresh tokens\n\nSecurity concerns raised:\n- 24h is too long — if a token is compromised, attacker has a full day\n- No revocation mechanism means we rely entirely on expiration\n- Kai: at Stripe, access tokens were 15min with refresh token rotation\n\nProposal:\n- Access token: 15 minute expiry\n- Refresh token: 7 day expiry with rotation (new refresh token on each use)\n- Service account tokens: 1 hour expiry, auto-renewed by the service\n- Token blocklist in Redis for emergency revocation (compromised tokens only)\n\nDiscussion:\n- Lisa: 15 min access token means more frequent token refreshes — any perf concern?\n- Bob: negligible with proper client-side caching. The auth library will handle refresh transparently.\n- Marcus: agreed, 15 min is the right balance\n\nDecision: APPROVED — 15min access / 7d refresh / 1h service / Redis blocklist\n\nAction Items:\n- Bob → implement token expiration config in auth library v2\n- Kai → implement Redis blocklist integration\n- Marcus → update ADR-019 with expiration policy addendum"
+  },
+  {
+    "id": "evt-019",
+    "type": "pr_description",
+    "source": "github",
+    "timestamp": "2026-01-29T11:00:00",
+    "participants": ["alice"],
+    "content": "PR #358 — Keycloak production configuration\n\nSets up Keycloak for production environment:\n- Realm configuration with Nexus Labs branding\n- RS256 key pair generation and rotation policy (90-day rotation)\n- Client configurations for all 14 services\n- Admin console access restricted to Platform team\n- Health checks and monitoring endpoints configured\n\nTested against staging cluster — all services can authenticate successfully.\n\nBlocked by: Waiting for DevOps to provision production database (RDS PostgreSQL)\nReviewers: @marcus @bob"
+  },
+  {
+    "id": "evt-020",
+    "type": "meeting_notes",
+    "source": "cross-team-sync",
+    "timestamp": "2026-01-30T14:00:00",
+    "participants": ["marcus", "sarah", "priya", "lisa"],
+    "content": "Cross-Team Sync #2: Auth Migration Progress — Jan 30\n\nPhase 1 Status:\n- Keycloak production config ready, waiting on DevOps for RDS provisioning (ETA: Feb 3)\n- Auth library v2 on track — core token verification working, adding refresh token support\n- Kai ramping up fast, implementing token blocklist\n\nProduct Team Update (Sarah):\n- Feature development on track for Feb 28 freeze\n- Identified 47 API endpoints in product-api that need auth migration\n- Elena will be the Product-side point person during Phase 2\n\nData Team Update (Priya):\n- ML Pipeline v2 inference API design finalized\n- Service account pattern documented and approved\n- Ready for Phase 3 implementation\n\nRisk Update:\n- RDS provisioning is 2 days behind (was due Jan 28) — not critical yet but watching it\n- If it slips past Feb 5, Phase 1 timeline is at risk\n\nNo changes to phased rollout plan.\nNext sync: Feb 6"
+  },
+  {
+    "id": "evt-021",
+    "type": "slack_message",
+    "source": "product-team",
+    "timestamp": "2026-02-02T09:15:00",
+    "participants": ["sarah"],
+    "content": "Team update: after reviewing the full scope of auth migration changes needed in product-api, and factoring in the integration testing window, I'm adjusting our launch target.\n\nNew launch date: April 1.\n\nReasoning: the Feb 10-14 auth migration window for product-api, combined with the testing buffer we need afterward, pushes our integration testing start to Feb 17 at earliest. That compresses our QA cycle too much for a March 15 launch. April 1 gives us breathing room without sacrificing quality.\n\nI'll update the roadmap and communicate to stakeholders."
+  },
+  {
+    "id": "evt-022",
+    "type": "pr_description",
+    "source": "github",
+    "timestamp": "2026-02-03T14:30:00",
+    "participants": ["bob", "kai"],
+    "content": "PR #371 — Auth library v2: core implementation\n\nComplete rewrite of the shared authentication library.\n\nChanges:\n- RS256 token verification with public key caching\n- Access token (15min) and refresh token (7d) support\n- Automatic transparent token refresh in client middleware\n- Service account token support (1h expiry, auto-renewal)\n- Redis-backed token blocklist for emergency revocation\n- Backwards-compatible API — existing services can upgrade without code changes\n- Comprehensive test suite (94% coverage)\n\nCo-authored with Kai who implemented the blocklist module.\n\nReviewers: @marcus @alice"
+  },
+  {
+    "id": "evt-023",
+    "type": "status_update",
+    "source": "platform-weekly",
+    "timestamp": "2026-02-04T10:00:00",
+    "participants": ["marcus"],
+    "content": "Platform Team Weekly Status — Feb 4\n\nAuth Migration Phase 1:\n- Status: ON TRACK (minor delays absorbed)\n- Keycloak production: DEPLOYED (RDS provisioned Feb 3, config applied same day)\n- Auth library v2: IN REVIEW (PR #371) — expecting merge today\n- Core service migration: starting Feb 5, targeting completion Feb 7\n\nPhase 2 Readiness:\n- product-api migration plan drafted with Elena (Product team)\n- 47 endpoints identified, migration scripts being prepared\n- Test suite being expanded to cover auth migration scenarios\n\nTeam:\n- Kai fully ramped up and contributing significantly\n- Alice moving to Phase 2 prep after Keycloak deploy\n- Bob finishing auth library, then supporting Phase 2\n\nRisks:\n- None. Phase 1 on track. Team is executing well."
+  },
+  {
+    "id": "evt-024",
+    "type": "slack_message",
+    "source": "data-team",
+    "timestamp": "2026-02-04T11:30:00",
+    "participants": ["priya", "james"],
+    "content": "priya: @james how's the inference API coming along?\n\njames: Good — the model serving layer is solid. But I realized we need the new auth library for the API gateway. Service account tokens specifically. We're currently using a hardcoded API key which is... not great.\n\npriya: Yeah that was the whole point of Phase 3. ETA Feb 17 for service account support in production. Can you work with the current setup until then?\n\njames: Current setup works, it's just not secure for production. We can keep developing against staging with the API key and swap to service accounts when ready."
+  },
+  {
+    "id": "evt-025",
+    "type": "meeting_notes",
+    "source": "all-hands",
+    "timestamp": "2026-02-05T16:00:00",
+    "participants": ["david", "lisa", "marcus", "sarah", "priya", "alice", "bob", "kai", "elena", "james", "tom"],
+    "content": "Nexus Labs All-Hands — Feb 5\n\nDavid (CEO):\n- Board meeting went well, positive reception to Q2 plans\n- Acknowledged the auth migration is critical infrastructure work\n- \"Security and technical excellence are not negotiable — take the time to do it right\"\n\nLisa (CTO) — Engineering Update:\n- Auth migration Phase 1 completing this week — on schedule\n- Q2 launch adjusted to April 1 to accommodate proper testing\n- ML Pipeline v2 progressing well, targeting March demo\n\nTeam Highlights:\n- Platform: Auth library v2 merged, Keycloak in production\n- Product: Feature development on track, prepping for auth migration\n- Data: Inference API design complete, waiting for auth Phase 3\n\nQ&A:\n- Tom: Will the auth migration affect the mobile app?\n  Marcus: No, mobile app uses the public API which won't change. The token format changes but the auth flow from the user's perspective is the same.\n- Elena: What's the rollback plan if Phase 2 has issues?\n  Marcus: Feature flags. Every migrated endpoint can fall back to the old auth path. We'll keep both paths live for 2 weeks after migration.\n\nNext all-hands: Feb 19"
+  },
+  {
+    "id": "evt-026",
+    "type": "slack_message",
+    "source": "platform-team",
+    "timestamp": "2026-02-06T17:00:00",
+    "participants": ["marcus"],
+    "content": "Phase 1 COMPLETE. All core platform services migrated to new auth. Keycloak handling all authentication. Auth library v2 live in production.\n\nMigrated services:\n- user-service\n- notification-service\n- billing-service\n- admin-api\n- 10 internal tools\n\nZero downtime. Zero incidents. Monitoring looks clean.\n\nPhase 2 starts Monday. @alice @bob @kai — take tomorrow easy, you earned it."
+  },
+  {
+    "id": "evt-027",
+    "type": "decision_memo",
+    "source": "architecture-decisions",
+    "timestamp": "2026-02-06T17:30:00",
+    "participants": ["marcus"],
+    "content": "ADR-019 Addendum: Token Expiration and Revocation Policy\n\nStatus: APPROVED (updated from original ADR-019)\n\nToken Lifetimes:\n- Access tokens: 15 minutes\n- Refresh tokens: 7 days (rotation on each use)\n- Service account tokens: 1 hour (auto-renewed)\n\nRevocation:\n- Redis-backed blocklist for emergency token revocation\n- Blocklist entries auto-expire matching the token's original TTL\n- Revocation API restricted to admin role\n\nKey Rotation:\n- RS256 key pairs rotated every 90 days\n- Grace period: old key valid for 24h after rotation to prevent disruption\n\nApproved by: Lisa Park (CTO)"
+  },
+  {
+    "id": "evt-028",
+    "type": "email",
+    "source": "email",
+    "timestamp": "2026-02-06T18:00:00",
+    "participants": ["david"],
+    "content": "From: David Chen <david@nexuslabs.io>\nTo: all-engineering@nexuslabs.io\nSubject: Great work on Auth Migration Phase 1\n\nTeam,\n\nJust heard Phase 1 of the auth migration is complete — zero downtime, ahead of the worst-case timeline. Exceptional work by the Platform team, and great coordination across all teams.\n\nThis is the kind of foundational work that compounds. A secure, modern auth system unblocks not just Q2 launch, but every product we build going forward.\n\nSpecial callout to Marcus, Alice, Bob, and Kai. And thanks to Sarah and Priya for the coordination on timeline planning.\n\nOnward to Phase 2.\n\nDavid"
+  }
+]
