@@ -49,6 +49,7 @@ function stripFrontmatter(content: string): string {
 export function NodePanel({ name, onClose, onNodeClick }: Props) {
   const [node, setNode] = useState<NodeDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [linksExpanded, setLinksExpanded] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -117,44 +118,7 @@ export function NodePanel({ name, onClose, onNodeClick }: Props) {
 
         {!loading && node && (
           <>
-            {/* Links */}
-            {hasLinks && (
-              <div style={{
-                padding: 12, marginBottom: 16, borderRadius: 8,
-                background: 'var(--surface)', border: '1px solid var(--border)',
-              }}>
-                {node.outlinks.length > 0 && (
-                  <div style={{ marginBottom: node.backlinks.length > 0 ? 10 : 0 }}>
-                    <div style={{
-                      fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
-                      letterSpacing: '0.06em', textTransform: 'uppercase',
-                      color: 'var(--text-dim)', marginBottom: 6,
-                    }}>Links to</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {node.outlinks.map(l => (
-                        <LinkChip key={l} name={l} variant="out" onClick={() => onNodeClick(l)} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {node.backlinks.length > 0 && (
-                  <div>
-                    <div style={{
-                      fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
-                      letterSpacing: '0.06em', textTransform: 'uppercase',
-                      color: 'var(--text-dim)', marginBottom: 6,
-                    }}>Referenced by</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {node.backlinks.map(l => (
-                        <LinkChip key={l} name={l} variant="back" onClick={() => onNodeClick(l)} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Markdown content */}
+            {/* Markdown content first — the main thing users want to read */}
             <div className="md-content">
               <Markdown
                 components={{
@@ -208,6 +172,67 @@ export function NodePanel({ name, onClose, onNodeClick }: Props) {
                 {processedContent}
               </Markdown>
             </div>
+
+            {/* Links — collapsible, below content */}
+            {hasLinks && (
+              <div style={{ marginTop: 16 }}>
+                <button
+                  onClick={() => setLinksExpanded(!linksExpanded)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+                    letterSpacing: '0.06em', textTransform: 'uppercase',
+                    color: 'var(--text-dim)', padding: 0, marginBottom: linksExpanded ? 8 : 0,
+                    transition: 'color 0.15s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-dim)')}
+                >
+                  <span style={{
+                    display: 'inline-block', transition: 'transform 0.2s',
+                    transform: linksExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    fontSize: 8,
+                  }}>&#9654;</span>
+                  Links ({node.outlinks.length + node.backlinks.length})
+                </button>
+                {linksExpanded && (
+                  <div style={{
+                    padding: 12, borderRadius: 8,
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                  }}>
+                    {node.outlinks.length > 0 && (
+                      <div style={{ marginBottom: node.backlinks.length > 0 ? 10 : 0 }}>
+                        <div style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+                          letterSpacing: '0.06em', textTransform: 'uppercase',
+                          color: 'var(--text-dim)', marginBottom: 6,
+                        }}>Links to</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {node.outlinks.map(l => (
+                            <LinkChip key={l} name={l} variant="out" onClick={() => onNodeClick(l)} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {node.backlinks.length > 0 && (
+                      <div>
+                        <div style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+                          letterSpacing: '0.06em', textTransform: 'uppercase',
+                          color: 'var(--text-dim)', marginBottom: 6,
+                        }}>Referenced by</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {node.backlinks.map(l => (
+                            <LinkChip key={l} name={l} variant="back" onClick={() => onNodeClick(l)} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

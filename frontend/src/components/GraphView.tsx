@@ -125,8 +125,8 @@ export const GraphView = forwardRef<GraphViewHandle, Props>(
         .selectAll<SVGLineElement, SimLink>('line')
         .data(links)
         .join('line')
-        .attr('stroke', '#0d1a30')
-        .attr('stroke-width', 1.2)
+        .attr('stroke', '#1e3a55')
+        .attr('stroke-width', 1.4)
         .attr('opacity', 0)
 
       // Halos (glow circles behind knowledge nodes)
@@ -197,7 +197,7 @@ export const GraphView = forwardRef<GraphViewHandle, Props>(
         .ease(d3.easeBackOut.overshoot(1.2))
         .attr('r', d => nodeRadius(d))
         .attr('opacity', 1)
-      linkEls.transition().delay(300).duration(600).attr('opacity', 0.2)
+      linkEls.transition().delay(300).duration(600).attr('opacity', 0.4)
       labelEls.transition().delay(500).duration(400).attr('opacity', 0.8)
 
       // Tick
@@ -258,7 +258,7 @@ export const GraphView = forwardRef<GraphViewHandle, Props>(
               const node = s.nodes.find(n => n.id === selectedNode)
               return node ? communityColor(node.community) : '#00e5ff'
             }
-            return '#0d1a30'
+            return '#1e3a55'
           })
           .attr('stroke-width', l => {
             const src = (l.source as SimNode).id
@@ -276,7 +276,7 @@ export const GraphView = forwardRef<GraphViewHandle, Props>(
       } else {
         s.nodeEls.transition().duration(200).attr('opacity', 1).attr('stroke-width', 1.5).attr('stroke-opacity', 0.25)
         s.labelEls.transition().duration(200).attr('opacity', 0.8)
-        s.linkEls.transition().duration(200).attr('opacity', 0.2).attr('stroke', '#0d1a30').attr('stroke-width', 1.2)
+        s.linkEls.transition().duration(200).attr('opacity', 0.4).attr('stroke', '#1e3a55').attr('stroke-width', 1.4)
       }
     }, [selectedNode, highlightedNodes])
 

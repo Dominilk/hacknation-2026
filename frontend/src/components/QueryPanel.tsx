@@ -161,42 +161,44 @@ export function QueryPanel({ onHighlightNodes, onNodeClick, onStatusChange }: Pr
         </div>
       )}
 
-      {/* Demo scenarios */}
-      <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-        <div style={{
-          fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
-          letterSpacing: '0.06em', textTransform: 'uppercase',
-          color: 'var(--text-dim)', marginBottom: 8,
-        }}>Demo scenarios</div>
-        {SCENARIOS.map(s => (
-          <button
-            key={s.label}
-            onClick={() => runScenario(s.question)}
-            style={{
-              display: 'block', width: '100%', padding: '8px 12px', marginBottom: 6,
-              border: '1px solid var(--border)', borderRadius: 8,
-              background: 'var(--surface)', color: 'var(--text-muted)',
-              fontFamily: 'var(--font-body)', fontSize: 13, textAlign: 'left',
-              cursor: 'pointer', transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'var(--surface-2)'
-              e.currentTarget.style.borderColor = 'var(--border-strong)'
-              e.currentTarget.style.color = 'var(--text)'
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = 'var(--surface)'
-              e.currentTarget.style.borderColor = ''
-              e.currentTarget.style.color = 'var(--text-muted)'
-            }}
-          >
-            <strong style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 12 }}>{s.label}</strong>
-            <span style={{ display: 'block', marginTop: 2, fontSize: 12, lineHeight: 1.4 }}>
-              {s.question.slice(0, 70)}...
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* Demo scenarios — hidden when answer is showing to give it full space */}
+      {!answer && !loading && (
+        <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+            letterSpacing: '0.06em', textTransform: 'uppercase',
+            color: 'var(--text-dim)', marginBottom: 8,
+          }}>Demo scenarios</div>
+          {SCENARIOS.map(s => (
+            <button
+              key={s.label}
+              onClick={() => runScenario(s.question)}
+              style={{
+                display: 'block', width: '100%', padding: '8px 12px', marginBottom: 6,
+                border: '1px solid var(--border)', borderRadius: 8,
+                background: 'var(--surface)', color: 'var(--text-muted)',
+                fontFamily: 'var(--font-body)', fontSize: 13, textAlign: 'left',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--surface-2)'
+                e.currentTarget.style.borderColor = 'var(--border-strong)'
+                e.currentTarget.style.color = 'var(--text)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'var(--surface)'
+                e.currentTarget.style.borderColor = ''
+                e.currentTarget.style.color = 'var(--text-muted)'
+              }}
+            >
+              <strong style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 12 }}>{s.label}</strong>
+              <span style={{ display: 'block', marginTop: 2, fontSize: 12, lineHeight: 1.4 }}>
+                {s.question.slice(0, 70)}...
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
