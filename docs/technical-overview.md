@@ -10,7 +10,7 @@
 
 The system has two layers: **raw events** and **distilled knowledge**. Events (emails, meetings, decisions, messages) arrive as structured data. AI agents process each event, extract lasting knowledge, and weave it into an interconnected graph — a living, versioned source of truth.
 
-The knowledge graph is **flat markdown with wikilinks** (Zettelkasten-style). Entity types emerge organically from the data — not hardcoded. The graph is **git-backed**: every change is a commit, every parallel ingestion runs in its own worktree, and merge commits form an audit trail.
+The knowledge graph is **flat markdown with wikilinks** (Zettelkasten-style). Entity types emerge organically from the data — not hardcoded. The graph is **git-backed**: every agent call that updates the graph results in a commit, every parallel ingestion runs in its own worktree, and commit messages form a transparent audit trail.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -88,17 +88,18 @@ Subject: California Update - Core/Noncore Proposal
 - **Conflict detection** — git surfaces when parallel agents modify the same node
 - **Reprocessing** — re-ingest from event nodes if agents improve
 
-### Why Wikilinks?
+### Why Markdown + Flat Files?
 
-- **Human-readable** — no databases, no proprietary formats
-- **Emergent structure** — agents create connections, graph topology emerges
+- **File over app** — plain text files are the most durable, portable, composable format. No vendor lock-in, no proprietary databases. The knowledge graph is just a directory of `.md` files.
+- **The natural medium for AI agents** — LLMs are trained on markdown. They're RL-tuned to read, write, and reason about it. Standard tools (`grep`, `cat`, `diff`) work out of the box. Git version control comes for free.
+- **Zettelkasten structure** — small, atomic notes connected by wikilinks. Emergent organization instead of imposed hierarchy. The topology of the graph *is* the structure.
 - **Graph analytics** — wikilinks → directed graph → PageRank, community detection, centrality
 
 ---
 
 ## Agents
 
-### Ingestion Agent (implemented)
+### Ingestion Agent
 
 The core agent. Processes events into lasting knowledge.
 
@@ -130,7 +131,7 @@ flowchart TD
 
 **Tracing:** Every tool call is captured via `RunHooks` — action type, arguments, referenced nodes, timing. The frontend animates these traces as the graph updates in real-time.
 
-### Query Agent (implemented)
+### Query Agent
 
 Read-only. Answers questions by searching and traversing the graph.
 
@@ -152,7 +153,7 @@ flowchart TD
 
 **Perspective-aware:** The agent adapts based on who's asking. A CEO gets a strategic overview. An engineer gets technical detail. A new hire gets onboarding context. The question text itself conveys the perspective — no separate role parameter needed.
 
-### Optimization Agent (designed)
+### Optimization Agent
 
 Runs periodically in its own worktree. Improves graph quality over time.
 
@@ -178,7 +179,7 @@ flowchart TD
     COMMIT --> MERGE["Merge → main"]
 ```
 
-### Conflict Resolution Agent (designed)
+### Conflict Resolution Agent
 
 Handles both **git merge conflicts** (same file edited by parallel agents) and **semantic conflicts** (contradictory information across nodes).
 
@@ -249,12 +250,12 @@ The analytics cache invalidates on graph mutations and recomputes lazily.
 
 Multiple source adapters convert raw data into the shared `IngestEvent` format:
 
-| Ingestor | Source | Status |
-|----------|--------|--------|
-| **Enron** | Enron email corpus (144k emails) | Implemented |
-| **Email** | Generic IMAP/SMTP email | Implemented |
-| **Discord** | Discord channels/threads | Implemented |
-| **File** | Document upload (PDF, text, etc.) | Implemented |
+| Ingestor | Source |
+|----------|--------|
+| **Enron** | Enron email corpus (144k emails) |
+| **Email** | Generic IMAP/SMTP email |
+| **Discord** | Discord channels/threads |
+| **File** | Document upload (PDF, text, etc.) |
 
 All ingestors produce the same `IngestEvent` Pydantic model → POST `/ingest` → same agent pipeline.
 
@@ -336,7 +337,7 @@ Each step highlights the affected nodes on the graph, showing how the agent trav
 └────────────────────────────────────────────────────────────────┘
 ```
 
-### Designed Extensions
+### Extensions
 
 **Stakeholder Notifications** — When new knowledge arrives, the system determines who needs to know based on the stakeholder graph. Not broadcast — targeted routing based on role, involvement, and knowledge dependencies.
 
