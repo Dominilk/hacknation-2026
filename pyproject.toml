@@ -4,4 +4,5 @@ members = [
   "ingestors/common",
   "ingestors/file",
   "core",
+  "ingestors/discord",
 ]

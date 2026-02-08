@@ -1,0 +1,20 @@
+[project]
+name = "discord"
+version = "0.1.0"
+description = "Discord message ingestor for Hacknation 2026"
+readme = "README.md"
+authors = [
+    { name = "Dominik Fluch", email = "dominik@diefluchs.at" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "discord.py>=2.3.2",
+    "common"
+]
+
+[tool.uv.sources]
+common = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.10.0,<0.11.0"]
+build-backend = "uv_build"
