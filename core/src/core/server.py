@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from agents import Runner, set_default_openai_client
@@ -13,6 +14,7 @@ from . import graph, embeddings
 from .git_ops import init_repo, create_worktree, remove_worktree, commit, merge_worktree, git_log
 from .agents.ingest import ingestion_agent, IngestionResult
 from .agents.query import make_query_agent
+from .tracing import TracingHooks
 
 
 @asynccontextmanager
@@ -27,15 +29,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI Chief of Staff", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
 class QueryRequest(BaseModel):
     question: str
-    perspective: str = "engineer"
 
 
-async def ingest_event(ctx: GraphContext, event: IngestEvent, merge_lock: asyncio.Lock) -> IngestionResult:
-    """Full ingestion orchestration: worktree -> event node -> agent -> commit -> merge -> cleanup."""
+async def ingest_event(ctx: GraphContext, event: IngestEvent, merge_lock: asyncio.Lock) -> dict:
+    """Full ingestion orchestration: worktree -> event node -> agent -> commit -> merge -> cleanup.
+    Returns combined IngestionResult + trace."""
     branch = f"ingest-{uuid4().hex[:8]}"
     worktree = await create_worktree(ctx.graph_root, branch)
     try:
@@ -51,11 +54,13 @@ async def ingest_event(ctx: GraphContext, event: IngestEvent, merge_lock: asynci
         event_md = f"---\n{frontmatter}\n---\n\n# Event: {event_name}\n\n```\n{event.content}\n```"
         graph.write_node(wt_ctx.graph_dir, event_name, event_md)
 
-        # Run ingestion agent
+        # Run ingestion agent with tracing
+        tracing = TracingHooks()
         result = await Runner.run(
             ingestion_agent,
             input=f"Process event node: [[{event_name}]]",
             context=wt_ctx,
+            hooks=tracing,
             max_turns=25,
         )
         output: IngestionResult = result.final_output
@@ -67,11 +72,12 @@ async def ingest_event(ctx: GraphContext, event: IngestEvent, merge_lock: asynci
         async with merge_lock:
             merge = await merge_worktree(ctx.graph_root, branch)
 
-        # Re-embed changed files after merge
+        # Re-embed changed files and update graph index after merge
         if merge.success:
             log = await git_log(ctx.graph_root, limit=1)
             if log and log[0]["files_changed"]:
-                for f in log[0]["files_changed"]:
+                changed = log[0]["files_changed"]
+                for f in changed:
                     if f.startswith("nodes/") and f.endswith(".md"):
                         node_name = Path(f).stem
                         content = graph.read_node(ctx.graph_dir, node_name)
@@ -79,8 +85,10 @@ async def ingest_event(ctx: GraphContext, event: IngestEvent, merge_lock: asynci
                             await embeddings.embed_node(ctx, node_name, content)
                         else:
                             await embeddings.remove_embedding(ctx, node_name)
+                if ctx.graph_index:
+                    ctx.graph_index.update_from_changes(changed)
 
-        return output
+        return {**output.model_dump(), "trace": tracing.to_list()}
     finally:
         await remove_worktree(ctx.graph_root, worktree, branch)
 
@@ -89,32 +97,30 @@ async def ingest_event(ctx: GraphContext, event: IngestEvent, merge_lock: asynci
 async def handle_ingest(event: IngestEvent, request: Request) -> dict:
     ctx: GraphContext = request.app.state.ctx
     merge_lock: asyncio.Lock = request.app.state.merge_lock
-    result = await ingest_event(ctx, event, merge_lock)
-    return result.model_dump()
+    return await ingest_event(ctx, event, merge_lock)
 
 
 @app.post("/query")
 async def handle_query(req: QueryRequest, request: Request) -> dict:
     ctx: GraphContext = request.app.state.ctx
-    agent = make_query_agent(req.perspective)
+    agent = make_query_agent(req.question)
     result = await Runner.run(agent, input=req.question, context=ctx, max_turns=15)
-    return {"answer": result.final_output, "perspective": req.perspective}
+    return {"answer": result.final_output}
 
 
 @app.get("/graph")
 async def handle_graph(request: Request) -> dict:
-    """Export graph for visualization: nodes + edges."""
+    """Export graph for visualization: nodes + edges + analytics."""
     ctx: GraphContext = request.app.state.ctx
-    nodes_list = graph.list_nodes(ctx.graph_dir)
-    nodes = []
-    edges = []
-    for name in nodes_list:
-        content = graph.read_node(ctx.graph_dir, name)
-        wikilinks = graph.extract_wikilinks(content) if content else []
-        nodes.append({"name": name, "content_length": len(content) if content else 0})
-        for target in wikilinks:
-            edges.append({"source": name, "target": target})
-    return {"nodes": nodes, "edges": edges}
+    assert ctx.graph_index is not None
+    return ctx.graph_index.to_json()
+
+
+@app.get("/graph/commits")
+async def handle_graph_commits(request: Request, limit: int = 50) -> list[dict]:
+    """Git log with files_changed per commit, for timeline slider."""
+    ctx: GraphContext = request.app.state.ctx
+    return await git_log(ctx.graph_root, limit=limit)
 
 
 @app.get("/nodes/{name}")
@@ -123,5 +129,9 @@ async def handle_node(name: str, request: Request) -> dict:
     content = graph.read_node(ctx.graph_dir, name)
     if content is None:
         return {"error": f"Node '{name}' not found"}
-    outlinks, backlinks = graph.get_links(ctx.graph_dir, name)
+    if ctx.graph_index:
+        outlinks = ctx.graph_index.get_outlinks(name)
+        backlinks = ctx.graph_index.get_backlinks(name)
+    else:
+        outlinks, backlinks = graph.get_links(ctx.graph_dir, name)
     return {"name": name, "content": content, "outlinks": outlinks, "backlinks": backlinks}

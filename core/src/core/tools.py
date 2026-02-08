@@ -24,6 +24,13 @@ async def tool_similarity_search(
     return "Similar nodes:\n" + "\n".join(lines)
 
 
+def _get_links(ctx: GraphContext, name: str) -> tuple[list[str], list[str]]:
+    """Use graph_index if available (main branch), fall back to disk scan (worktrees)."""
+    if ctx.graph_index:
+        return ctx.graph_index.get_outlinks(name), ctx.graph_index.get_backlinks(name)
+    return graph.get_links(ctx.graph_dir, name)
+
+
 @function_tool
 async def tool_read_node(
     ctx: RunContextWrapper[GraphContext],
@@ -33,7 +40,7 @@ async def tool_read_node(
     content = graph.read_node(ctx.context.graph_dir, name)
     if content is None:
         return f"Node '{name}' does not exist."
-    outlinks, backlinks = graph.get_links(ctx.context.graph_dir, name)
+    outlinks, backlinks = _get_links(ctx.context, name)
     out_str = ", ".join(f"[[{link}]]" for link in outlinks) or "none"
     back_str = ", ".join(f"[[{link}]]" for link in backlinks) or "none"
     return f"{content}\n\n---\nOutlinks: {out_str}\nBacklinks: {back_str}"
@@ -45,7 +52,7 @@ async def tool_list_links(
     name: Annotated[str, "Node name (kebab-case)"],
 ) -> str:
     """List a node's outgoing and incoming wikilinks."""
-    outlinks, backlinks = graph.get_links(ctx.context.graph_dir, name)
+    outlinks, backlinks = _get_links(ctx.context, name)
     out_str = ", ".join(f"[[{link}]]" for link in outlinks) or "none"
     back_str = ", ".join(f"[[{link}]]" for link in backlinks) or "none"
     return f"Outlinks: {out_str}\nBacklinks: {back_str}"

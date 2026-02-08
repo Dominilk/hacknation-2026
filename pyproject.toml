@@ -6,4 +6,5 @@ members = [
   "core",
   "ingestors/discord",
   "ingestors/email",
+  "ingestors/enron",
 ]

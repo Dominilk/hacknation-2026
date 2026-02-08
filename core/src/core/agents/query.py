@@ -3,13 +3,6 @@ from agents import Agent
 from ..context import GraphContext
 from ..tools import READ_TOOLS
 
-PERSPECTIVE_PROMPTS = {
-    "executive": "You are answering for a senior executive. Be concise — 3-5 bullet points max. Focus on strategic impact, decisions, cross-team dependencies, and timeline changes. Skip technical implementation details.",
-    "engineer": "You are answering for an engineer. Be thorough and technical. Include implementation details, system architecture implications, and technical rationale for decisions.",
-    "pm": "You are answering for a product manager. Focus on scope, timeline, stakeholder impact, and dependencies. Include who owns what and what decisions are pending.",
-    "new-joiner": "You are answering for someone new to the organization. Explain all context — define acronyms, introduce people by role, explain project history. Assume no prior context.",
-}
-
 BASE_QUERY_INSTRUCTIONS = """You are an organizational knowledge graph query agent. You answer questions by searching and traversing the knowledge graph.
 
 ## Your Workflow
@@ -42,10 +35,14 @@ Compose your answer from what you've gathered:
 """
 
 
-def make_query_agent(perspective: str = "engineer") -> Agent[GraphContext]:
-    """Create a query agent with the given perspective baked in."""
-    perspective_prompt = PERSPECTIVE_PROMPTS.get(perspective, PERSPECTIVE_PROMPTS["engineer"])
-    instructions = f"{perspective_prompt}\n\n{BASE_QUERY_INSTRUCTIONS}"
+def make_query_agent(user_text: str) -> Agent[GraphContext]:
+    """Create a query agent. The user's full text IS the perspective — we pass it
+    as context in the instructions so the agent tailors depth/framing accordingly."""
+    instructions = f"""The user asked: "{user_text}"
+
+Tailor your response to match what this person seems to need — if they mention being a CEO or executive, be concise and strategic. If they ask technical questions, be detailed. If they seem new, explain context. If unclear, default to a thorough but readable response.
+
+{BASE_QUERY_INSTRUCTIONS}"""
     return Agent[GraphContext](
         name="Query Agent",
         instructions=instructions,
