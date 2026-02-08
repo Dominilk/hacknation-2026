@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
-import { api } from '../api'
+import { api, type TraceStep } from '../api'
+import { TraceAnimation } from './TraceAnimation'
 
 const SAMPLES: Record<string, string> = {
   meeting: `Engineering All-Hands Meeting — Q2 Planning
@@ -49,11 +50,13 @@ Need executive sign-off on holding strategy by end of day.`,
 interface Props {
   onIngestComplete: () => void
   onStatusChange: (msg: string) => void
+  onHighlightNodes: (nodes: string[]) => void
 }
 
-export function IngestPanel({ onIngestComplete, onStatusChange }: Props) {
+export function IngestPanel({ onIngestComplete, onStatusChange, onHighlightNodes }: Props) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ created: string[]; updated: string[]; message: string } | null>(null)
+  const [trace, setTrace] = useState<TraceStep[] | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const submit = async () => {
@@ -61,6 +64,7 @@ export function IngestPanel({ onIngestComplete, onStatusChange }: Props) {
     if (!content || loading) return
     setLoading(true)
     setResult(null)
+    setTrace(null)
     onStatusChange('AI is analyzing and updating the graph...')
     try {
       const res = await api.ingest(content)
@@ -69,6 +73,7 @@ export function IngestPanel({ onIngestComplete, onStatusChange }: Props) {
         updated: res.nodes_updated,
         message: res.commit_message,
       })
+      if (res.trace?.length > 0) setTrace(res.trace)
       onStatusChange(`Ingested — ${res.nodes_created.length} created, ${res.nodes_updated.length} updated`)
       if (inputRef.current) inputRef.current.value = ''
       onIngestComplete()
@@ -176,6 +181,14 @@ export function IngestPanel({ onIngestComplete, onStatusChange }: Props) {
           )}
           <div style={{ marginTop: 8, fontStyle: 'italic' }}>{result.message}</div>
         </div>
+      )}
+
+      {trace && (
+        <TraceAnimation
+          trace={trace}
+          onHighlightNodes={onHighlightNodes}
+          onClose={() => { setTrace(null); onHighlightNodes([]) }}
+        />
       )}
     </div>
   )

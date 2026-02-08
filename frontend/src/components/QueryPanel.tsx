@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import Markdown from 'react-markdown'
 import { api } from '../api'
 
 const SCENARIOS = [
@@ -26,30 +27,8 @@ interface Props {
   onStatusChange: (msg: string) => void
 }
 
-function renderAnswer(text: string, onNodeClick: (name: string) => void) {
-  const parts = text.split(/(\[\[[^\]]+\]\])/)
-  return parts.map((part, i) => {
-    const match = part.match(/^\[\[([^\]]+)\]\]$/)
-    if (match) {
-      return (
-        <span
-          key={i}
-          onClick={() => onNodeClick(match[1])}
-          style={{
-            fontFamily: 'var(--font-mono)', fontSize: 12,
-            padding: '1px 6px', borderRadius: 3,
-            background: 'var(--accent-dim)', color: 'var(--accent)',
-            cursor: 'pointer', transition: 'background 0.15s',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,229,255,0.2)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'var(--accent-dim)')}
-        >
-          {match[1]}
-        </span>
-      )
-    }
-    return <span key={i}>{part}</span>
-  })
+function preprocessWikilinks(md: string): string {
+  return md.replace(/\[\[([^\]]+)\]\]/g, '[$1](#node:$1)')
 }
 
 export function QueryPanel({ onHighlightNodes, onNodeClick, onStatusChange }: Props) {
@@ -142,12 +121,43 @@ export function QueryPanel({ onHighlightNodes, onNodeClick, onStatusChange }: Pr
 
       {answer && (
         <div style={{
-          flex: 1, overflow: 'auto', padding: 16,
-          background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10,
-          fontSize: 14, lineHeight: 1.75, color: 'var(--text-muted)',
-          whiteSpace: 'pre-wrap', wordWrap: 'break-word',
+          flex: 1, overflow: 'auto', padding: 18,
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
         }}>
-          {renderAnswer(answer, onNodeClick)}
+          <div className="md-content">
+            <Markdown
+              components={{
+                a: ({ href, children }) => {
+                  if (href?.startsWith('#node:')) {
+                    const nodeName = href.slice(6)
+                    return (
+                      <span
+                        onClick={() => onNodeClick(nodeName)}
+                        style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 12,
+                          padding: '1px 6px', borderRadius: 3,
+                          background: 'var(--accent-dim)', color: 'var(--accent)',
+                          cursor: 'pointer', transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,229,255,0.2)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'var(--accent-dim)')}
+                      >
+                        {children}
+                      </span>
+                    )
+                  }
+                  return (
+                    <a href={href} target="_blank" rel="noopener noreferrer" style={{
+                      color: 'var(--accent)', textDecoration: 'none',
+                      borderBottom: '1px solid rgba(0,229,255,0.25)',
+                    }}>{children}</a>
+                  )
+                },
+              }}
+            >
+              {preprocessWikilinks(answer)}
+            </Markdown>
+          </div>
         </div>
       )}
 
@@ -165,23 +175,25 @@ export function QueryPanel({ onHighlightNodes, onNodeClick, onStatusChange }: Pr
             style={{
               display: 'block', width: '100%', padding: '8px 12px', marginBottom: 6,
               border: '1px solid var(--border)', borderRadius: 8,
-              background: 'transparent', color: 'var(--text-muted)',
+              background: 'var(--surface)', color: 'var(--text-muted)',
               fontFamily: 'var(--font-body)', fontSize: 13, textAlign: 'left',
               cursor: 'pointer', transition: 'all 0.15s',
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.background = 'var(--accent-dim)'
+              e.currentTarget.style.background = 'var(--surface-2)'
               e.currentTarget.style.borderColor = 'var(--border-strong)'
               e.currentTarget.style.color = 'var(--text)'
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.background = 'var(--surface)'
               e.currentTarget.style.borderColor = ''
               e.currentTarget.style.color = 'var(--text-muted)'
             }}
           >
-            <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{s.label}:</strong>{' '}
-            {s.question.slice(0, 60)}...
+            <strong style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 12 }}>{s.label}</strong>
+            <span style={{ display: 'block', marginTop: 2, fontSize: 12, lineHeight: 1.4 }}>
+              {s.question.slice(0, 70)}...
+            </span>
           </button>
         ))}
       </div>

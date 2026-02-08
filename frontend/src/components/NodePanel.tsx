@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Markdown from 'react-markdown'
 import { api, type NodeDetail } from '../api'
 
 interface Props {
@@ -7,29 +8,10 @@ interface Props {
   onNodeClick: (name: string) => void
 }
 
-function renderContent(text: string, onNodeClick: (name: string) => void) {
-  const parts = text.split(/(\[\[[^\]]+\]\])/)
-  return parts.map((part, i) => {
-    const match = part.match(/^\[\[([^\]]+)\]\]$/)
-    if (match) {
-      return (
-        <span
-          key={i}
-          onClick={() => onNodeClick(match[1])}
-          style={{
-            color: 'var(--accent)', cursor: 'pointer',
-            borderBottom: '1px dashed rgba(0,229,255,0.25)',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.borderBottomStyle = 'solid')}
-          onMouseLeave={e => (e.currentTarget.style.borderBottomStyle = 'dashed')}
-        >
-          {match[1]}
-        </span>
-      )
-    }
-    return <span key={i}>{part}</span>
-  })
+// Convert [[wikilinks]] to markdown links before react-markdown parses them
+// This way wikilinks work inside bold, lists, headers, etc.
+function preprocessWikilinks(md: string): string {
+  return md.replace(/\[\[([^\]]+)\]\]/g, '[$1](#node:$1)')
 }
 
 function LinkChip({ name, variant, onClick }: { name: string; variant: 'out' | 'back'; onClick: () => void }) {
@@ -56,6 +38,14 @@ function LinkChip({ name, variant, onClick }: { name: string; variant: 'out' | '
   )
 }
 
+function stripFrontmatter(content: string): string {
+  if (content.startsWith('---\n')) {
+    const end = content.indexOf('\n---\n', 4)
+    if (end !== -1) return content.slice(end + 5).trim()
+  }
+  return content
+}
+
 export function NodePanel({ name, onClose, onNodeClick }: Props) {
   const [node, setNode] = useState<NodeDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -63,33 +53,38 @@ export function NodePanel({ name, onClose, onNodeClick }: Props) {
   useEffect(() => {
     setLoading(true)
     api.getNode(name)
-      .then(setNode)
+      .then(data => setNode(data.error ? null : data))
       .catch(() => setNode(null))
       .finally(() => setLoading(false))
   }, [name])
 
   const isEvent = name.startsWith('event-')
   const displayName = name.replace(/-/g, ' ')
+  const processedContent = node?.content
+    ? preprocessWikilinks(stripFrontmatter(node.content))
+    : ''
+  const hasLinks = node && (node.outlinks.length > 0 || node.backlinks.length > 0)
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
         padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0,
       }}>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700,
-            letterSpacing: '-0.02em', lineHeight: 1.2, marginBottom: 6,
+            letterSpacing: '-0.02em', lineHeight: 1.3, marginBottom: 8,
             color: 'var(--text)',
           }}>
             {displayName}
           </div>
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 5,
-            fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600,
-            padding: '3px 10px', borderRadius: 5, letterSpacing: '0.02em',
+            fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+            padding: '2px 8px', borderRadius: 4, letterSpacing: '0.04em',
+            textTransform: 'uppercase',
             background: isEvent ? 'rgba(58,74,96,0.18)' : 'var(--accent-dim)',
             color: isEvent ? 'var(--text-muted)' : 'var(--accent)',
             border: `1px solid ${isEvent ? 'rgba(58,74,96,0.3)' : 'rgba(0,229,255,0.12)'}`,
@@ -99,12 +94,13 @@ export function NodePanel({ name, onClose, onNodeClick }: Props) {
         </div>
         <button onClick={onClose} style={{
           background: 'none', border: 'none', color: 'var(--text-dim)',
-          cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '4px 8px',
+          cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: '2px 6px',
+          flexShrink: 0,
         }}>&times;</button>
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
         {loading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-dim)', fontSize: 13 }}>
             <div style={{
@@ -122,46 +118,95 @@ export function NodePanel({ name, onClose, onNodeClick }: Props) {
         {!loading && node && (
           <>
             {/* Links */}
-            {node.outlinks.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
-                  letterSpacing: '0.06em', textTransform: 'uppercase',
-                  color: 'var(--text-dim)', marginBottom: 8,
-                }}>Links to</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {node.outlinks.map(l => (
-                    <LinkChip key={l} name={l} variant="out" onClick={() => onNodeClick(l)} />
-                  ))}
-                </div>
-              </div>
-            )}
-            {node.backlinks.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
-                  letterSpacing: '0.06em', textTransform: 'uppercase',
-                  color: 'var(--text-dim)', marginBottom: 8,
-                }}>Referenced by</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {node.backlinks.map(l => (
-                    <LinkChip key={l} name={l} variant="back" onClick={() => onNodeClick(l)} />
-                  ))}
-                </div>
+            {hasLinks && (
+              <div style={{
+                padding: 12, marginBottom: 16, borderRadius: 8,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+              }}>
+                {node.outlinks.length > 0 && (
+                  <div style={{ marginBottom: node.backlinks.length > 0 ? 10 : 0 }}>
+                    <div style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      color: 'var(--text-dim)', marginBottom: 6,
+                    }}>Links to</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {node.outlinks.map(l => (
+                        <LinkChip key={l} name={l} variant="out" onClick={() => onNodeClick(l)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {node.backlinks.length > 0 && (
+                  <div>
+                    <div style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      color: 'var(--text-dim)', marginBottom: 6,
+                    }}>Referenced by</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {node.backlinks.map(l => (
+                        <LinkChip key={l} name={l} variant="back" onClick={() => onNodeClick(l)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Content */}
-            <div style={{
-              paddingTop: (node.outlinks.length > 0 || node.backlinks.length > 0) ? 16 : 0,
-              borderTop: (node.outlinks.length > 0 || node.backlinks.length > 0) ? '1px solid var(--border)' : 'none',
-            }}>
-              <pre style={{
-                fontFamily: 'var(--font-body)', fontSize: 14, lineHeight: 1.75,
-                color: 'var(--text-muted)', whiteSpace: 'pre-wrap', wordWrap: 'break-word',
-              }}>
-                {renderContent(node.content, onNodeClick)}
-              </pre>
+            {/* Markdown content */}
+            <div className="md-content">
+              <Markdown
+                components={{
+                  a: ({ href, children }) => {
+                    if (href?.startsWith('#node:')) {
+                      const nodeName = href.slice(6)
+                      return (
+                        <span
+                          onClick={() => onNodeClick(nodeName)}
+                          style={{
+                            color: 'var(--accent)', cursor: 'pointer',
+                            borderBottom: '1px dashed rgba(0,229,255,0.25)',
+                          }}
+                        >
+                          {children}
+                        </span>
+                      )
+                    }
+                    return (
+                      <a href={href} target="_blank" rel="noopener noreferrer" style={{
+                        color: 'var(--accent)', textDecoration: 'none',
+                        borderBottom: '1px solid rgba(0,229,255,0.25)',
+                      }}>{children}</a>
+                    )
+                  },
+                  code: ({ children, className }) => {
+                    const isBlock = className?.startsWith('language-') || String(children).includes('\n')
+                    if (isBlock) {
+                      return (
+                        <pre style={{
+                          background: 'var(--bg)', border: '1px solid var(--border)',
+                          borderRadius: 8, padding: 14, marginBottom: 12,
+                          overflow: 'auto', fontSize: 12, lineHeight: 1.6,
+                          fontFamily: 'var(--font-mono)', color: 'var(--text-muted)',
+                        }}>
+                          <code>{children}</code>
+                        </pre>
+                      )
+                    }
+                    return (
+                      <code style={{
+                        background: 'rgba(0,229,255,0.06)', padding: '1px 5px',
+                        borderRadius: 3, fontSize: '0.9em',
+                        fontFamily: 'var(--font-mono)', color: 'var(--accent)',
+                      }}>{children}</code>
+                    )
+                  },
+                  pre: ({ children }) => <>{children}</>,
+                }}
+              >
+                {processedContent}
+              </Markdown>
             </div>
           </>
         )}

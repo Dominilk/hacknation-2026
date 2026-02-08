@@ -201,6 +201,7 @@ export default function App() {
               <IngestPanel
                 onIngestComplete={handleIngestComplete}
                 onStatusChange={setStatus}
+                onHighlightNodes={setHighlightedNodes}
               />
             </div>
           )}
