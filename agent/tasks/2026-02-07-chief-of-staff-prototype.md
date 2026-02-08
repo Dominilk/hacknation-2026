@@ -74,3 +74,28 @@ The system should organically discover entities and relationships — no prescri
 
 ### Architecture revision (2026-02-08)
 Stripped the initial spec down to core. Removed: YAML frontmatter, explicit participants/metadata fields, igraph, overspecified API responses, detailed optimize agent spec. Added: git-based version history, XML ingest format. The principle is minimal tooling, maximum agent autonomy — see what works, add complexity incrementally.
+
+### Events as nodes + parallelism (2026-02-08)
+- Events are also nodes in the graph (raw XML stored verbatim). Enables provenance, cross-referencing (agents link slack → meetings → PRs), reprocessing.
+- Event node creation is system infrastructure, not agent work. Agent receives event node name, reads it via `read_node`.
+- Git worktrees for parallelism from day 1. Each agent run gets its own worktree. Merge commit = audit log.
+- Two types of conflicts: git merge conflicts (parallel edits to same file) AND semantic conflicts (contradictory information in events/graph). Both → resolution agent → escalate if needed.
+
+### Notification system (2026-02-08)
+- No category/tagging system. Users specify what they care about via natural language prompts ("notify me about decisions affecting Q2 timeline").
+- System maintains a notification queue (conflicts, important changes, etc.).
+- Agent matches queue items against user preferences.
+- Future: privacy/permissions — events carry access metadata, derived nodes inherit restrictions. Propagation rules need agent interpretation with strong specs. Not V0.
+
+### Multi-tenant / privacy model (2026-02-08)
+- Each team = its own knowledge graph (own tenant). Full read access for all team members. No per-user ACLs.
+- Cross-team sharing: generate a report/view from your graph (human-approved), which becomes an event for another team's graph.
+- Federation model: each graph is sovereign. Sharing boundary = human-approved report. Agents in receiving graph process it like any other event.
+- Scales by decomposition: 200 teams × 50 users >> 10k users on one graph. Less cross-org small-world connectivity, but much simpler/more scalable.
+- Not V0 but shapes architecture: no need for permission metadata on nodes or events within a tenant.
+
+### Provider agnosticism (2026-02-08)
+- Starting with OpenAI Agents SDK (hackathon credits), but architecture should allow swapping.
+- Infrastructure layer (graph.py, embeddings.py, git_ops.py) has zero SDK coupling.
+- Only tools.py and agents/*.py are SDK-specific. Swapping providers = rewriting ~2 files.
+- Embeddings function can be made pluggable via GraphContext. Keep simple for V0.
