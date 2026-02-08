@@ -1,9 +1,9 @@
 # config.yaml for Email Ingestor
-imap_server: "imap.example.com"
+imap_server: "imap.gmail.com"
 imap_port: 993
 imap_ssl: true
-username: "your_email@example.com"
-password: "your_email_password" # Consider using environment variables or a secure secret management solution
+username: "splatoon.channel@gmail.com"
+password: "idzm cnlu fwgg gqmt " # Consider using environment variables or a secure secret management solution
 mailbox: "INBOX" # Mailbox to monitor (e.g., INBOX)
 poll_interval_seconds: 60 # How often to check for new emails
 email_batch_size: 10 # Number of emails to batch before sending for ingestion
