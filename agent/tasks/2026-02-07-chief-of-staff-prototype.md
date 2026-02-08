@@ -41,13 +41,16 @@ The system should organically discover entities and relationships — no prescri
 
 ## Done When
 
-- [ ] Can ingest an XML event and see the graph update (new nodes, new wikilinks)
-- [ ] Git commit after each ingestion with agent-written message
-- [ ] Can query the graph and get perspective-aware answers (CEO vs engineer)
-- [ ] "What changed today?" works via git history
-- [ ] Demo runs end-to-end with seed data
-- [ ] (Stretch) Visual graph display
-- [ ] (Stretch) Optimization agent
+- [x] Can ingest an event and see the graph update (new nodes, new wikilinks) — DONE, smoke tested
+- [x] Git commit after each ingestion with agent-written message — DONE
+- [x] Can query the graph and get perspective-aware answers — DONE
+- [ ] "What changed today?" works via agentic search using git history
+- [ ] Demo runs end-to-end with real-world data (Enron emails)
+- [ ] Interactive graph visualization with timeline, node detail, agent trace
+- [ ] Hostable web app judges can try
+- [ ] (Stretch) Voice input
+- [ ] (Stretch) Optimization/critic agent
+- [ ] (Stretch) Notification system
 
 ## Sources
 
@@ -93,6 +96,19 @@ Stripped the initial spec down to core. Removed: YAML frontmatter, explicit part
 - Federation model: each graph is sovereign. Sharing boundary = human-approved report. Agents in receiving graph process it like any other event.
 - Scales by decomposition: 200 teams × 50 users >> 10k users on one graph. Less cross-org small-world connectivity, but much simpler/more scalable.
 - Not V0 but shapes architecture: no need for permission metadata on nodes or events within a tenant.
+
+### Phase 1 complete (2026-02-08)
+- Foundation implemented: graph.py, embeddings.py, git_ops.py, context.py, tools.py, agents/, server.py
+- Smoke test passed: 2 events → 11 nodes, deduplication works, perspective queries work, ~45s/ingestion
+- Two fixes applied post-smoke-test: (1) `set_default_openai_client()` for Agents SDK, (2) `from shared import IngestEvent` (Dominik moved models to `__init__.py`)
+- Pydantic Settings for .env loading
+- Event nodes get YAML frontmatter (type: event, timestamp), knowledge nodes don't
+- Perspective is natural language prompt, not a toggle. Implemented via closure: `make_query_agent(perspective_text)`
+- IngestEvent.content is raw provider content (not necessarily XML), wrapped in code block in event node
+- Temperature left at default (no preset value)
+- Fully agentic tool use (no pre-fetching)
+- Enron email dataset chosen for demo data (HuggingFace pre-parsed version)
+- Real-world data: 100-200 emails from 5-8 key Enron employees, June-Nov 2001
 
 ### Provider agnosticism (2026-02-08)
 - Starting with OpenAI Agents SDK (hackathon credits), but architecture should allow swapping.

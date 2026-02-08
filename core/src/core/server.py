@@ -6,7 +6,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
-from agents import Runner
+from agents import Runner, set_default_openai_client
 from shared import IngestEvent
 from .context import GraphContext, Settings
 from . import graph, embeddings
@@ -19,7 +19,9 @@ from .agents.query import make_query_agent
 async def lifespan(app: FastAPI):
     settings = Settings()
     await init_repo(settings.graph_root)
-    app.state.ctx = GraphContext.create(settings)
+    ctx = GraphContext.create(settings)
+    set_default_openai_client(ctx.openai_client)
+    app.state.ctx = ctx
     app.state.merge_lock = asyncio.Lock()
     yield
 
