@@ -18,6 +18,15 @@ services:
       - "3000:80"
     depends_on:
       - backend
+  
+  file_ingest:
+    build:
+      context: .
+      dockerfile: ingestors/file/Dockerfile
+    ports: 
+      - "8001:8000"
+    volumes:
+      - ./ingestors/file/config.yaml:/app/ingestors/file/config.yaml
 
 volumes:
   graph-data:

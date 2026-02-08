@@ -1,4 +1,4 @@
 # config.yaml
 hostname: "0.0.0.0"
 port: 8000
-ingestion_endpoint: "https://127.0.0.1:1234/ingest/"
+ingestion_endpoint: "http://backend:8000/ingest"

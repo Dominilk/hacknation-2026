@@ -8,15 +8,14 @@ from docx import Document  # For DOCX text extraction
 import io  # For handling file in memory
 import os  # For path operations
 import yaml  # For reading configuration file
-
-
-# --- Configuration Loading ---
-def load_config(config_path: str = "config.yaml"):
-    with open(config_path, "r") as f:
-        return yaml.safe_load(f)
-
+import xml.etree.ElementTree as ET
+import datetime
+from common import IngestAPIClient
+from common import load_config
 
 CONFIG = load_config()
+
+INGEST_CLIENT = IngestAPIClient(CONFIG.ingestion_endpoint, CONFIG.ingestion_api_key)
 
 app = FastAPI()
 
@@ -30,11 +29,11 @@ templates = Jinja2Templates(directory="static")
 async def read_root(request: Request):
     """Serve the file upload frontend."""
     return templates.TemplateResponse(
-        "index.html", {"request": request, "ingestion_endpoint": CONFIG["ingestion_endpoint"]}
+        "index.html", {"request": request}
     )
 
 
-@app.post(CONFIG["ingestion_endpoint"])
+@app.post("/upload")
 async def create_upload_file(file: UploadFile = File(...)):
     """Handle file uploads, validate document types, and extract raw text."""
 
@@ -43,6 +42,7 @@ async def create_upload_file(file: UploadFile = File(...)):
         "application/pdf": "pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
         "text/plain": "txt",
+        "text/csv": "csv",
     }
 
     # Get file extension from filename or content type
@@ -71,19 +71,46 @@ async def create_upload_file(file: UploadFile = File(...)):
             document = Document(file_like_object)
             for para in document.paragraphs:
                 extracted_text += para.text + "\n"
+        elif file_extension == "csv":
+            extracted_text = file_like_object.read().decode("utf-8")
         elif file_extension == "txt":
             extracted_text = file_like_object.read().decode("utf-8")
 
     except Exception as e:
+        print(f"Error processing file: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing file: {e}")
 
-    return {
-        "filename": file.filename,
-        "content_type": content_type,
-        "extracted_text_preview": extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text,
-        "full_text_length": len(extracted_text),
-    }
+    # --- XML Construction for Ingestion ---
+    root = ET.Element("document")
+
+    # Add metadata
+    metadata_elem = ET.SubElement(root, "metadata")
+    ET.SubElement(metadata_elem, "filename").text = file.filename
+    ET.SubElement(metadata_elem, "content_type").text = content_type
+    ET.SubElement(metadata_elem, "full_text_length").text = str(len(extracted_text))
+    
+    # Add content
+    content_elem = ET.SubElement(root, "content")
+    content_elem.text = extracted_text
+
+    xml_payload = ET.tostring(root, encoding="unicode", xml_declaration=True)
+
+    try:
+        # Send the XML payload to the remote ingestion endpoint
+        # The IngestEvent expects 'content' as a string and 'metadata' as a dict.
+        # Here, the entire XML is the 'content'.
+        ingestion_response = await INGEST_CLIENT.ingest(xml_payload)
+        
+        return {
+            "message": "File processed and forwarded for ingestion.",
+            "filename": file.filename,
+            "ingestion_status": "success",
+            "remote_response": ingestion_response
+        }
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=f"Failed to forward file for ingestion: {e}")
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host=CONFIG["hostname"], port=CONFIG["port"])
+    uvicorn.run(app, host=CONFIG.hostname, port=CONFIG.port)
