@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 from datasets import load_dataset
@@ -31,6 +33,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Ingest Enron emails into the knowledge graph")
     p.add_argument("--url", default=INGEST_URL, help="Core service /ingest URL")
     p.add_argument("--limit", type=int, default=0, help="Max emails to send (0 = all)")
+    p.add_argument("--graph-dir", default="graph", help="Path to graph directory (for skip detection)")
     p.add_argument("--dry-run", action="store_true", help="Preview without sending")
     return p.parse_args()
 
@@ -103,12 +106,66 @@ def load_emails() -> list[IngestEvent]:
     return events
 
 
+def get_existing_message_ids(graph_dir: Path) -> set[str]:
+    """Scan event node frontmatter for message_id fields already ingested."""
+    ids: set[str] = set()
+    msg_re = re.compile(r"^message_id:\s*(.+)$", re.MULTILINE)
+    nodes_dir = graph_dir / "nodes"
+    if not nodes_dir.exists():
+        return ids
+    for f in nodes_dir.glob("event-*.md"):
+        text = f.read_text(errors="ignore")
+        m = msg_re.search(text)
+        if m:
+            ids.add(m.group(1).strip())
+    return ids
+
+
+def format_elapsed(seconds: float) -> str:
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    if h:
+        return f"{h}h{m:02d}m"
+    return f"{m}m{s:02d}s"
+
+
 async def send_events(events: list[IngestEvent], url: str) -> None:
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    import time
+
+    total = len(events)
+    successes = 0
+    failures = 0
+    t0 = time.monotonic()
+
+    async with httpx.AsyncClient(timeout=180.0) as client:
         for i, event in enumerate(events, 1):
-            resp = await client.post(url, json=event.to_dict())
-            resp.raise_for_status()
-            print(f"[{i}/{len(events)}] Ingested: {event.metadata.get('subject', '')[:60]}")
+            subject = event.metadata.get("subject", "")[:55]
+            elapsed = time.monotonic() - t0
+            avg = elapsed / i if i > 1 else 0
+            eta = avg * (total - i)
+            bar_width = 30
+            filled = int(bar_width * i / total)
+            bar = "█" * filled + "░" * (bar_width - filled)
+            pct = i * 100 // total
+
+            try:
+                resp = await client.post(url, json=event.to_dict())
+                resp.raise_for_status()
+                successes += 1
+                status = "OK"
+            except (httpx.HTTPStatusError, httpx.ConnectError, httpx.ReadTimeout) as e:
+                failures += 1
+                status = f"FAIL: {e}"
+
+            print(
+                f"\r{bar} {pct:3d}% [{i}/{total}] "
+                f"{format_elapsed(elapsed)} elapsed, ~{format_elapsed(eta)} remaining | "
+                f"{status}: {subject}",
+                flush=True,
+            )
+
+    elapsed = time.monotonic() - t0
+    print(f"\n\nDone in {format_elapsed(elapsed)}: {successes} ingested, {failures} failed")
 
 
 def main():
@@ -116,10 +173,20 @@ def main():
     print(f"Loading Enron emails from HuggingFace (Jun–Nov 2001, {len(KEY_EMPLOYEES)} key employees)...")
     events = load_emails()
 
+    # Skip already-ingested emails
+    graph_dir = Path(args.graph_dir)
+    existing_ids = get_existing_message_ids(graph_dir)
+    if existing_ids:
+        before = len(events)
+        events = [e for e in events if e.metadata.get("message_id", "") not in existing_ids]
+        skipped = before - len(events)
+        if skipped:
+            print(f"Skipping {skipped} already-ingested emails")
+
     if args.limit > 0:
         events = events[: args.limit]
 
-    print(f"Found {len(events)} emails after filtering")
+    print(f"{len(events)} emails to process")
 
     if args.dry_run:
         for i, e in enumerate(events[:20], 1):
@@ -129,7 +196,7 @@ def main():
         return
 
     if not events:
-        print("No emails to ingest.")
+        print("No new emails to ingest.")
         return
 
     print(f"Sending {len(events)} emails to {args.url}...")
