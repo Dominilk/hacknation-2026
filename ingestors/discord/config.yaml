@@ -1,5 +1,5 @@
 # config.yaml for Discord Ingestor
-discord_bot_token: "<token>"
+discord_bot_token: "<TOKEN>"
 discord_channel_ids: [] # List of channel IDs to monitor, e.g., ["123456789012345678", "987654321098765432"]
 monitor_all_channels: true # Set to true to monitor all accessible channels. If true, discord_channel_ids will be ignored.
 message_batch_size: 10 # Number of messages to batch before sending for ingestion

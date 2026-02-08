@@ -56,8 +56,7 @@ async def process_message_batch():
         logging.info(f"Sending batch of {len(message_buffer)} messages for ingestion.")
         ingestion_response = await INGEST_CLIENT.ingest(xml_payload)
         logging.info(f"Ingestion successful: {ingestion_response}")
-
-        message_buffer = [] # Clear buffer after attempt
+        message_buffer = [] # Clear buffer only after successful attempt
     except Exception as e:
         logging.error(f"Failed to ingest message batch: {e}")
 
@@ -93,7 +92,7 @@ async def on_message(message):
 async def flush_buffer_periodically():
     """Flushes the message buffer periodically, in case batches don't fill up quickly."""
     while True:
-        await asyncio.sleep(CONFIG.sleep_delay)  # Flush every 60 seconds
+        await asyncio.sleep(CONFIG.sleep_delay)  # Flush at configurable interval
         async with message_buffer_lock:
             if message_buffer:
                 logging.info("Flushing message buffer due to periodic timer.")

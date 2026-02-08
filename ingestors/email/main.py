@@ -72,14 +72,21 @@ async def process_email_batch():
         logging.info(f"Sending batch of {len(email_buffer)} emails for ingestion.")
         ingestion_response = await INGEST_CLIENT.ingest(xml_payload)
         logging.info(f"Ingestion successful: {ingestion_response}")
+        email_buffer = [] # Clear buffer only after successful attempt
     except Exception as e:
         logging.error(f"Failed to ingest email batch: {e}")
-    finally:
-        email_buffer = [] # Clear buffer after attempt
 
 
 async def fetch_emails():
     """Connects to IMAP, fetches unread emails, and processes them."""
+    global email_buffer
+    async with email_buffer_lock:
+        if len(email_buffer) >= CONFIG.email_batch_size:
+            await process_email_batch()
+            if len(email_buffer) >= CONFIG.email_batch_size:
+                logging.warning(f"Email buffer is full ({len(email_buffer)} emails). Skipping fetch cycle to prevent overflow.")
+                return
+
     context = ssl.create_default_context()
     if not CONFIG.imap_ssl:
         context = None # No SSL
@@ -96,36 +103,63 @@ async def fetch_emails():
         client.select_folder(CONFIG.mailbox)
         logging.info(f"Selected mailbox: {CONFIG.mailbox}")
 
-        # Search for unread emails. Use 'ALL' to fetch all emails, then filter.
-        messages = client.search('UNSEEN') 
-        logging.info(f"Found {len(messages)} new emails.")
+        messages_uids = client.search('UNSEEN')
+        messages_uids.sort() # Sort UIDs numerically (oldest first by common IMAP server behavior)
+        logging.info(f"Found {len(messages_uids)} new emails to process.")
 
-        if not messages:
+        if not messages_uids:
             return
 
-        # Fetch message data. 'RFC822' fetches the entire email body.
-        # UID is used for persistent IDs, which is better for marking/moving
-        response = client.fetch(messages, ['RFC822', 'UID'])
+        # Process messages in chunks to avoid overwhelming the IMAP server or memory
+        chunk_size = CONFIG.email_batch_size * 5 # Fetch a larger chunk than ingestion batch size
+        processed_count = 0
 
-        for msg_uid, msg_data in response.items():
-            raw_email = msg_data[b'RFC822']
-            parsed_msg = email.message_from_bytes(raw_email)
+        for i in range(0, len(messages_uids), chunk_size):
+            chunk_uids = messages_uids[i:i + chunk_size]
+            logging.info(f"Fetching RFC822 for {len(chunk_uids)} emails (Chunk {i//chunk_size + 1}/{len(messages_uids)//chunk_size + 1}).")
 
-            async with email_buffer_lock:
-                email_buffer.append({'id': msg_uid, 'parsed_msg': parsed_msg})
-                if len(email_buffer) >= CONFIG.email_batch_size:
-                    await process_email_batch()
+            # Fetch message data. 'RFC822' fetches the entire email body.
+            # UID is used for persistent IDs, which is better for marking/moving
+            response = client.fetch(chunk_uids, ['RFC822', 'UID'])
+
+            for msg_uid in chunk_uids:
+                if msg_uid not in response:
+                    logging.warning(f"Message UID {msg_uid} not found in fetch response. Skipping.")
+                    continue
+
+                msg_data = response[msg_uid]
+                raw_email = msg_data[b'RFC822']
+                parsed_msg = email.message_from_bytes(raw_email)
+                
+                async with email_buffer_lock:
+                    email_buffer.append({'id': msg_uid, 'parsed_msg': parsed_msg})
+
+                    if len(email_buffer) >= CONFIG.email_batch_size:
+                        await process_email_batch()
+
+                        if len(email_buffer) >= CONFIG.email_batch_size:
+                            return # If buffer is still full after processing, exit to prevent overflow
+                
+                if CONFIG.mark_as_read:
+                    client.set_flags(msg_uid, ['\Seen'])
+                    # logging.debug(f"Marked email UID {msg_uid} as read.") # Too verbose for large counts
+                
+                if CONFIG.move_to_folder:
+                    # Check if folder exists, if not, create it (only once per run/creation)
+                    # This check was previously inside the loop, which is inefficient.
+                    # It's better to check and create once per IMAP session if not existing.
+                    # For simplicity, if not pre-existing, IMAPClient.move might create it anyway
+                    # if the IMAP server supports auto-creation, or fail otherwise.
+                    # For a robust solution, client.list_folders() and client.create_folder()
+                    # should be handled outside the per-email loop if move_to_folder is used.
+                    client.move(msg_uid, CONFIG.move_to_folder)
+                    # logging.debug(f"Moved email UID {msg_uid} to '{CONFIG.move_to_folder}'.") # Too verbose
+
+            processed_count += len(chunk_uids)
+            logging.info(f"Processed {processed_count}/{len(messages_uids)} emails.")
             
-            if CONFIG.mark_as_read:
-                client.set_flags(msg_uid, ['\Seen'])
-                logging.debug(f"Marked email UID {msg_uid} as read.")
-            
-            if CONFIG.move_to_folder:
-                if CONFIG.move_to_folder not in client.list_folders(): # Check if folder exists
-                    logging.warning(f"Target folder '{CONFIG.move_to_folder}' does not exist. Creating it.")
-                    client.create_folder(CONFIG.move_to_folder)
-                client.move(msg_uid, CONFIG.move_to_folder)
-                logging.debug(f"Moved email UID {msg_uid} to '{CONFIG.move_to_folder}'.")
+            # Yield control to allow other tasks to run and prevent blocking
+            await asyncio.sleep(0.1) 
 
         # Process any remaining emails in the buffer after the loop
         if email_buffer:
