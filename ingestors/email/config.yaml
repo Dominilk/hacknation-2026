@@ -1,0 +1,14 @@
+# config.yaml for Email Ingestor
+imap_server: "imap.example.com"
+imap_port: 993
+imap_ssl: true
+username: "your_email@example.com"
+password: "your_email_password" # Consider using environment variables or a secure secret management solution
+mailbox: "INBOX" # Mailbox to monitor (e.g., INBOX)
+poll_interval_seconds: 60 # How often to check for new emails
+email_batch_size: 10 # Number of emails to batch before sending for ingestion
+mark_as_read: true # Mark emails as read after processing
+move_to_folder: null # Optional: move processed emails to a folder (e.g., "Processed")
+
+ingestion_endpoint: "https://127.0.0.1:1234/ingest/"
+ingestion_api_key: "" # Optional API key for the ingestion endpoint
