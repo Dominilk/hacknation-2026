@@ -4,18 +4,20 @@ from fastapi import FastAPI, File, UploadFile, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pypdf import PdfReader # For PDF text extraction
-from docx import Document # For DOCX text extraction
-import io # For handling file in memory
-import os # For path operations
-import yaml # For reading configuration file
+from pypdf import PdfReader
+from docx import Document
+import io
+import os
+import xml.etree.ElementTree as ET
+import datetime
 
-# --- Configuration Loading ---
-def load_config(config_path: str = "config.yaml"):
-    with open(config_path, 'r') as f:
-        return yaml.safe_load(f)
+from common import load_config, IngestAPIClient
 
 CONFIG = load_config()
+
+# It's good practice to ensure CONFIG.ingestion_endpoint is used for the client
+# And CONFIG.ingestion_api_key might be None, which the IngestAPIClient handles.
+INGEST_CLIENT = IngestAPIClient(CONFIG.ingestion_endpoint, CONFIG.ingestion_api_key)
 
 app = FastAPI()
 
@@ -27,14 +29,14 @@ templates = Jinja2Templates(directory="static")
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     """Serve the file upload frontend."""
-    return templates.TemplateResponse(
-        "index.html", 
-        {"request": request, "ingestion_endpoint": CONFIG["ingestion_endpoint"]}
-    )
+    return templates.TemplateResponse("index.html", {"request": request})
 
-@app.post(CONFIG["ingestion_endpoint"])
+@app.post("/upload") # Local upload endpoint for this FastAPI server, matches frontend
 async def create_upload_file(file: UploadFile = File(...)):
-    """Handle file uploads, validate document types, and extract raw text."""
+    """
+    Handle file uploads, validate document types, extract raw text,
+    and forward the content as XML to the remote ingestion endpoint.
+    """
     
     # Define allowed document types and their corresponding MIME types/extensions
     ALLOWED_MIME_TYPES = {
@@ -75,14 +77,36 @@ async def create_upload_file(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing file: {e}")
 
-    
+    # --- XML Construction for Ingestion ---
+    root = ET.Element("document")
 
-    return {
-        "filename": file.filename,
-        "content_type": content_type,
-        "extracted_text_preview": extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text,
-        "full_text_length": len(extracted_text)
-    }
+    # Add metadata
+    metadata_elem = ET.SubElement(root, "metadata")
+    ET.SubElement(metadata_elem, "filename").text = file.filename
+    ET.SubElement(metadata_elem, "content_type").text = content_type
+    ET.SubElement(metadata_elem, "full_text_length").text = str(len(extracted_text))
+    ET.SubElement(metadata_elem, "timestamp").text = datetime.datetime.now().isoformat() # Add timestamp
+
+    # Add content
+    content_elem = ET.SubElement(root, "content")
+    content_elem.text = extracted_text
+
+    xml_payload = ET.tostring(root, encoding="unicode", xml_declaration=True)
+
+    try:
+        # Send the XML payload to the remote ingestion endpoint
+        # The IngestEvent expects 'content' as a string and 'metadata' as a dict.
+        # Here, the entire XML is the 'content'.
+        ingestion_response = await INGEST_CLIENT.ingest(xml_payload)
+        
+        return {
+            "message": "File processed and forwarded for ingestion.",
+            "filename": file.filename,
+            "ingestion_status": "success",
+            "remote_response": ingestion_response
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to forward file for ingestion: {e}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host=CONFIG["hostname"], port=CONFIG["port"])
+    uvicorn.run(app, host=CONFIG.hostname, port=CONFIG.port)
