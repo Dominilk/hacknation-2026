@@ -1,0 +1,6 @@
+[tool.uv.workspace]
+members = [
+  "shared",
+  "ingestors/common",
+  "ingestors/file",
+]
